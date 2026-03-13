@@ -53,7 +53,41 @@ int print_char(char c, unsigned char color)
     return 0;
 }
 
-
+void delete_char(void)
+{
+    // Don't delete if cursor is at the beginning
+    if (cursor_index == 0)
+        return;
+    
+    // Move cursor back one position
+    cursor_index--;
+    
+    // Clear the character on screen
+    if (cursor_index < ROWS_COUNT * COLUMNS_COUNT)
+        screen_buffer[cursor_index] = ' ' | (unsigned short)YELLOW << 8;
+    
+    // Clear the character in the buffer
+    stock[screen_index][cursor_index] = ' ' | (unsigned short)YELLOW << 8;
+    
+    // Handle going back to previous row
+    if (cursor_index % COLUMNS_COUNT == COLUMNS_COUNT - 1)
+    {
+        if (total_row[screen_index] > 0)
+        {
+            total_row[screen_index]--;
+        }
+    }
+    
+    // Update display
+    if (total_row[screen_index] >= ROWS_COUNT)
+    {
+        scroll_screen();
+    }
+    else
+    {
+        update_cursor();
+    }
+}
 
 void print_str(const char *s, unsigned char color)
 {

@@ -105,6 +105,8 @@ void handle_keyboard()
                     switch_screen(ascii - '1');
                 }
                 //HANDLE SCREEN SWITCH;
+            } else if (scancode == 0x0E) {  // Backspace scancode
+                delete_char();
             } else if (!(scancode & RELEASE_MASK)) { // Ignore key release events
                 char ascii = scancode_to_ascii(scancode, shift_pressed);
                 print_char(ascii, WHITE);

@@ -52,5 +52,6 @@ void display_screen(int screen_index);
 void update_cursor();
 void set_cursor(int x, int y);
 void set_cursor_offset(int offset);
+void delete_char(void);
 
 #endif
