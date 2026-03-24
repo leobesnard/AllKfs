@@ -1,81 +1,131 @@
+/*
+ * =============================================================================
+ *                              KFS2 BONUS - OUTPUT FUNCTIONS
+ * =============================================================================
+ * Character, string, and number output functions for printf
+ * =============================================================================
+ */
+
 #include "../include/ft_printf.h"
 #include "screen.h"
 
-void	ft_putchar(char c)
+/* =============================================================================
+ *                              CHARACTER AND STRING OUTPUT
+ * ============================================================================= */
+
+/*
+ * ft_putchar - Output a single character
+ * @c: Character to output
+ */
+void ft_putchar(char c)
 {
-	// write(1, &c, 1);
-	// print_char(c, WHITE);W
-	// char outCou[] = {c, '\0'};
-	// print_str(outCou, WHITE);
-	print_char(c, WHITE);
+    vga_putchar(c, WHITE);
 }
 
-void	ft_putstr(char const *str)
+/*
+ * ft_putstr - Output a null-terminated string
+ * @str: String to output
+ */
+void ft_putstr(char const *str)
 {
-	int	i;
+    int index;
 
-	i = 0;
-	while (str[i] != '\0')
-	{
-		ft_putchar(str[i]);
-		i++;
-	}
+    index = 0;
+    while (str[index] != '\0')
+    {
+        ft_putchar(str[index]);
+        index++;
+    }
 }
 
-void	ft_putnbr(int nb)
+/* =============================================================================
+ *                              INTEGER OUTPUT
+ * ============================================================================= */
+
+/*
+ * ft_putnbr - Output a signed integer
+ * @nb: Integer to output
+ *
+ * Handles INT_MIN special case and recursively prints digits
+ */
+void ft_putnbr(int nb)
 {
-	if (nb == -2147483648)
-	{
-		print_str("-2147483648", WHITE);
-		// write(1, "-2147483648", 11);
-		return ;
-	}
-	if (nb >= 0 && nb < 10)
-		ft_putchar(nb + '0');
-	else if (nb < 0)
-	{
-		ft_putchar('-');
-		ft_putnbr(nb * (-1));
-	}
-	else
-	{
-		ft_putnbr(nb / 10);
-		ft_putnbr(nb % 10);
-	}
+    if (nb == -2147483648)
+    {
+        vga_puts("-2147483648", WHITE);
+        return;
+    }
+
+    if (nb >= 0 && nb < 10)
+    {
+        ft_putchar(nb + '0');
+    }
+    else if (nb < 0)
+    {
+        ft_putchar('-');
+        ft_putnbr(nb * (-1));
+    }
+    else
+    {
+        ft_putnbr(nb / 10);
+        ft_putnbr(nb % 10);
+    }
 }
 
-void	ft_putnbr_u(unsigned int nb)
+/*
+ * ft_putnbr_u - Output an unsigned integer
+ * @nb: Unsigned integer to output
+ */
+void ft_putnbr_u(unsigned int nb)
 {
-	if (nb < 10)
-		ft_putchar(nb + '0');
-	else
-	{
-		ft_putnbr(nb / 10);
-		ft_putnbr(nb % 10);
-	}
+    if (nb < 10)
+    {
+        ft_putchar(nb + '0');
+    }
+    else
+    {
+        ft_putnbr(nb / 10);
+        ft_putnbr(nb % 10);
+    }
 }
 
-void	ft_print_hexa_x(unsigned long nbr, char c)
-{
-	char	*hex;
-	int		res[100];
-	int		i;
+/* =============================================================================
+ *                              HEXADECIMAL OUTPUT
+ * ============================================================================= */
 
-	if (c == 'x')
-		hex = "0123456789abcdef";
-	else
-		hex = "0123456789ABCDEF";
-	i = 0;
-	while (nbr >= 16)
-	{
-		res[i] = hex[nbr % 16];
-		nbr = nbr / 16;
-		i++;
-	}
-	res[i] = hex[nbr];
-	while (i >= 0)
-	{
-		ft_putchar(res[i]);
-		i--;
-	}
+/*
+ * ft_print_hexa_x - Output a number in hexadecimal format
+ * @nbr: Number to convert
+ * @c: Case specifier ('x' for lowercase, 'X' for uppercase)
+ */
+void ft_print_hexa_x(unsigned long nbr, char c)
+{
+    char    *hex_chars;
+    int     digits[100];
+    int     index;
+
+    if (c == 'x')
+    {
+        hex_chars = "0123456789abcdef";
+    }
+    else
+    {
+        hex_chars = "0123456789ABCDEF";
+    }
+
+    index = 0;
+    while (nbr >= 16)
+    {
+        digits[index] = hex_chars[nbr % 16];
+        nbr = nbr / 16;
+        index++;
+    }
+    digits[index] = hex_chars[nbr];
+
+    /* Output digits in reverse order (most significant first) */
+    while (index >= 0)
+    {
+        ft_putchar(digits[index]);
+        index--;
+    }
 }

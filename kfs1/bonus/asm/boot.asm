@@ -1,22 +1,44 @@
+; ============================================================================
+;
+;   boot.asm - Multiboot-compliant kernel entry point
+;
+;   This is the initial entry point for the kernel. It sets up the stack
+;   and transfers control to the C kernel main function.
+;
+; ============================================================================
+
 bits 32
 
-section .multiboot               ;according to multiboot spec
-        dd 0x1BADB002            ;set magic number for
-                                 ;bootloader
-        dd 0x0                   ;set flags
-        dd - (0x1BADB002 + 0x0)	; Checksum
-        
+; ============================================================================
+;   Multiboot Header Section
+;
+;   The multiboot header must be present for GRUB to recognize this as
+;   a valid kernel. It contains the magic number, flags, and checksum.
+; ============================================================================
+
+section .multiboot
+    dd 0x1BADB002                       ; Multiboot magic number
+    dd 0x0                              ; Flags (none set)
+    dd -(0x1BADB002 + 0x0)              ; Checksum (must sum to zero)
+
+; ============================================================================
+;   Text Section - Code Entry Point
+; ============================================================================
 
 section .text
 global start
-extern main                      ;defined in the C file
+extern main                             ; External C function
 
 start:
-        cli                      ;block interrupts
-        mov esp, stack_space     ;set stack pointer
-        call main
-        hlt                      ;halt the CPU
+    cli                                 ; Disable interrupts
+    mov esp, kernel_stack_top           ; Initialize stack pointer
+    call main                           ; Call C kernel entry point
+    hlt                                 ; Halt CPU (should never reach here)
+
+; ============================================================================
+;   BSS Section - Uninitialized Data (Kernel Stack)
+; ============================================================================
 
 section .bss
-resb 32768			; 8KB for stack
-stack_space:
+resb 32768                              ; Reserve 32KB for kernel stack
+kernel_stack_top:                       ; Stack grows downward, so this is the top

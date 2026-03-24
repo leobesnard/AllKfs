@@ -1,22 +1,39 @@
+; **************************************************************************** ;
+;                                                                              ;
+;   boot.asm - Multiboot-compliant kernel bootstrap code                       ;
+;                                                                              ;
+; **************************************************************************** ;
+
 bits 32
 
-section .multiboot               ;according to multiboot spec
-        dd 0x1BADB002            ;set magic number for
-                                 ;bootloader
-        dd 0x0                   ;set flags
-        dd - (0x1BADB002 + 0x0)	; Checksum
-        
+; ----------------------------------------------------------------------------
+; Multiboot Header Section
+; The bootloader (GRUB) searches for this magic signature to identify
+; the kernel as multiboot-compliant
+; ----------------------------------------------------------------------------
+section .multiboot
+    dd 0x1BADB002                ; Multiboot magic number
+    dd 0x0                       ; Flags (no special requirements)
+    dd - (0x1BADB002 + 0x0)      ; Checksum (magic + flags + checksum = 0)
 
+; ----------------------------------------------------------------------------
+; Text Section - Executable code
+; ----------------------------------------------------------------------------
 section .text
+
 global start
-extern main                      ;defined in the C file
+extern main                      ; C kernel entry point
 
+; Kernel entry point - called by bootloader
 start:
-        cli                      ;block interrupts
-        mov esp, stack_space     ;set stack pointer
-        call main
-        hlt                      ;halt the CPU
+    cli                          ; Disable interrupts during initialization
+    mov esp, kernel_stack_top    ; Initialize stack pointer
+    call main                    ; Transfer control to C kernel
+    hlt                          ; Halt processor on return
 
+; ----------------------------------------------------------------------------
+; BSS Section - Uninitialized data (kernel stack)
+; ----------------------------------------------------------------------------
 section .bss
-resb 8192			; 8KB for stack
-stack_space:
+    resb 8192                    ; Reserve 8KB for kernel stack
+kernel_stack_top:

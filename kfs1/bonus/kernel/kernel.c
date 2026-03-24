@@ -1,63 +1,126 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*   kernel.c - Main kernel entry point                                       */
+/*                                                                            */
+/*   Initializes the VGA display, sets up multiple virtual screens,           */
+/*   and enters the keyboard input loop.                                      */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "screen.h"
 #include "keyboard.h"
 #include "ft_printf.h"
 
-void init_screens()
-{
-    // mémoire est mappée dans le segment de mémoire à l'adresse 0xB8000
-    screen_buffer = (unsigned short *)VGA_ADDRESS;
-    for (int i = 0; i < SCREEN_COUNT; i++) {
-        switch_screen(i);
-        clear_screen();
-        print_str("Welcome to screen", GREEN);
-        kprintf(" %d ", i + 1);
-        print_str("!\n", GREEN);
-    }
-    switch_screen(0);
-}
+/* ==========================================================================
+   Screen Initialization
+   ========================================================================== */
 
-void switch_screen(int new_screen_index)
+void
+init_screens(void)
 {
-    if (new_screen_index < 0 || new_screen_index >= SCREEN_COUNT)
-        return ;
+    /* Map VGA buffer to video memory address */
+    vga_buffer = (unsigned short *)VGA_MEMORY_BASE;
 
-    stock_cursor_index[screen_index] = cursor_index;
-    screen_index = new_screen_index;
-    cursor_index = stock_cursor_index[screen_index];
-    display_screen(screen_index);
-}
-
-void display_screen(int screen_index)
-{
-    if (screen_index < 0 || screen_index >= SCREEN_COUNT)
-        return ;
-    if (total_row[screen_index] >= ROWS_COUNT)
+    /* Initialize each virtual screen */
+    for (int i = 0; i < NUM_SCREENS; i++)
     {
-        scroll_screen();
+        screen_switch(i);
+        vga_clear();
+        vga_puts("Welcome to screen", GREEN);
+        kprintf(" %d ", i + 1);
+        vga_puts("!\n", GREEN);
+    }
+
+    /* Switch back to first screen */
+    screen_switch(0);
+}
+
+/* ==========================================================================
+   Screen Switching
+   ========================================================================== */
+
+void
+screen_switch(int new_screen_idx)
+{
+    /* Validate screen index */
+    if (new_screen_idx < 0 || new_screen_idx >= NUM_SCREENS)
+    {
+        return;
+    }
+
+    /* Save current cursor position */
+    stock_cursor_index[active_screen] = cursor_pos;
+
+    /* Switch to new screen */
+    active_screen = new_screen_idx;
+
+    /* Restore cursor position for new screen */
+    cursor_pos = stock_cursor_index[active_screen];
+
+    /* Display the new screen */
+    screen_display(active_screen);
+}
+
+/* ==========================================================================
+   Screen Display
+   ========================================================================== */
+
+void
+screen_display(int screen_idx)
+{
+    /* Validate screen index */
+    if (screen_idx < 0 || screen_idx >= NUM_SCREENS)
+    {
+        return;
+    }
+
+    /* Handle scrolling if content exceeds visible rows */
+    if (row_count[screen_idx] >= VGA_ROWS)
+    {
+        screen_scroll();
     }
     else
     {
+        /* Copy buffer content to VGA memory */
         int last_char_index = 0;
-        for (int u = 0; u < ROWS_COUNT * COLUMNS_COUNT; u++) {
-            screen_buffer[u] = stock[screen_index][u];
-            if (screen_buffer[u] && screen_buffer[u] != (' ' | (unsigned short)YELLOW<<8)) {
+
+        for (int u = 0; u < VGA_ROWS * VGA_COLS; u++)
+        {
+            vga_buffer[u] = stock[screen_idx][u];
+
+            /* Track position of last non-empty character */
+            if (vga_buffer[u]
+                && vga_buffer[u] != (' ' | (unsigned short)YELLOW << 8))
+            {
                 last_char_index = u;
             }
         }
-        set_cursor_offset(last_char_index + 1);
-    } 
+
+        /* Position cursor after last character */
+        cursor_set_offset(last_char_index + 1);
+    }
 }
 
+/* ==========================================================================
+   Kernel Main Entry Point
+   ========================================================================== */
 
-void main()
+void
+main(void)
 {
-    set_cursor_offset(0);
+    /* Initialize cursor to top-left corner */
+    cursor_set_offset(0);
+
+    /* Initialize all virtual screens */
     init_screens();
-    handle_keyboard();
+
+    /* Enter keyboard input handler (infinite loop) */
+    keyboard_handler();
 }
 
-
-//TO DO
-// FACTORISATIO -> -Cursor detection
-//                 -total_line++ (buffer overflow)
-//                 -empecher l'overwrite de l'enete de page (welcome 1, 2, 3) (buffer overflow) 
+/*
+ * TODO:
+ * - Refactor cursor detection logic
+ * - Handle total_line++ buffer overflow
+ * - Prevent overwriting page headers (welcome 1, 2, 3)
+ */

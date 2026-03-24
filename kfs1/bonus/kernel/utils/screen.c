@@ -1,220 +1,308 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*   screen.c - VGA text mode output implementation                           */
+/*                                                                            */
+/*   Implements character output, string printing, cursor control, and        */
+/*   screen clearing for VGA text mode display.                               */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "screen.h"
 #include "ft_printf.h"
 
-unsigned short* screen_buffer;
-unsigned int cursor_index = 0;
-unsigned int total_row[SCREEN_COUNT];
-unsigned char scancode = 0;
+/* ==========================================================================
+   Global Variables
+   ========================================================================== */
 
-int print_char(char c, unsigned char color)
+unsigned short  *vga_buffer;
+unsigned int    cursor_pos = 0;
+unsigned int    row_count[NUM_SCREENS];
+unsigned char   scancode = 0;
+
+/* ==========================================================================
+   Port I/O Helper
+   ========================================================================== */
+
+static inline void
+outb(int port, int value)
 {
-    extra_scroll[screen_index] = 0;
-    if (c == '\n') {
-        print_new_line();
-        return 0;
-    } else if (c >= 32 && c <= 126){
-        if (cursor_index < ROWS_COUNT * COLUMNS_COUNT)
-            screen_buffer[cursor_index] = c | (unsigned short)color << 8;
-        stock[screen_index][cursor_index] = c | (unsigned short)color << 8;
-        cursor_index++;
-    }
-    // le premier octet est le caractère lui-même (selon le code ASCII)
-    // le second octet contient des informations sur la couleur de fond et la couleur du texte.
-    // Bits 0-3 : Couleur du texte (ex: 0x07 = blanc).
-    // Bits 4-7 : Couleur de fond (ex: 0x00 = fond noir).
+    /* Write a byte to the specified I/O port */
+    asm volatile ("outb %%al, %%dx" : : "a"(value), "d"(port));
+}
 
-    
-    if (cursor_index % COLUMNS_COUNT == 0)
+/* ==========================================================================
+   Cursor Control Functions
+   ========================================================================== */
+
+void
+cursor_set_offset(int offset)
+{
+    /* Send low byte of cursor position */
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (uint8_t)(offset & 0xFF));
+
+    /* Send high byte of cursor position */
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (uint8_t)((offset >> 8)));
+}
+
+void
+cursor_update(void)
+{
+    cursor_set_offset(cursor_pos);
+}
+
+void
+cursor_set_xy(int x, int y)
+{
+    unsigned short position = y * VGA_COLS + x;
+    cursor_set_offset(position);
+}
+
+/* ==========================================================================
+   Character Output Functions
+   ========================================================================== */
+
+int
+vga_putchar(char c, unsigned char color)
+{
+    /* Reset scroll offset when typing */
+    scroll_offset[active_screen] = 0;
+
+    /* Handle newline character */
+    if (c == '\n')
     {
-        if (total_row[screen_index] == (BUFFER_ROW_COUNT - 1))
+        vga_newline();
+        return 0;
+    }
+
+    /* Handle printable characters (ASCII 32-126) */
+    if (c >= 32 && c <= 126)
+    {
+        /* Write to VGA memory if within visible area */
+        if (cursor_pos < VGA_ROWS * VGA_COLS)
         {
-            for (int i = COLUMNS_COUNT; i < COLUMNS_COUNT * BUFFER_ROW_COUNT; i++) {
-                stock[screen_index][i - COLUMNS_COUNT] = stock[screen_index][i];
+            vga_buffer[cursor_pos] = c | (unsigned short)color << 8;
+        }
+
+        /* Always write to the screen buffer */
+        stock[active_screen][cursor_pos] = c | (unsigned short)color << 8;
+        cursor_pos++;
+    }
+
+    /*
+     * VGA character format:
+     * - First byte: ASCII character code
+     * - Second byte: Attribute byte (foreground + background color)
+     *   Bits 0-3: Foreground color
+     *   Bits 4-7: Background color
+     */
+
+    /* Check if we've reached the end of a row */
+    if (cursor_pos % VGA_COLS == 0)
+    {
+        /* Check if we've reached the buffer limit */
+        if (row_count[active_screen] == (BUFFER_ROWS - 1))
+        {
+            /* Scroll the buffer up by one line */
+            for (int i = VGA_COLS; i < VGA_COLS * BUFFER_ROWS; i++)
+            {
+                stock[active_screen][i - VGA_COLS] = stock[active_screen][i];
             }
-            for (int i = COLUMNS_COUNT * (BUFFER_ROW_COUNT - 1); i < COLUMNS_COUNT * BUFFER_ROW_COUNT; i++) {
-                stock[screen_index][i] = ' ' | (unsigned int)YELLOW << 8;
+
+            /* Clear the last line */
+            for (int i = VGA_COLS * (BUFFER_ROWS - 1); i < VGA_COLS * BUFFER_ROWS; i++)
+            {
+                stock[active_screen][i] = ' ' | (unsigned int)YELLOW << 8;
             }
-            cursor_index -= COLUMNS_COUNT;
+
+            cursor_pos -= VGA_COLS;
         }
         else
         {
-            total_row[screen_index]++;
+            row_count[active_screen]++;
         }
     }
-    if (total_row[screen_index] >= ROWS_COUNT)
+
+    /* Update display based on row count */
+    if (row_count[active_screen] >= VGA_ROWS)
     {
-        scroll_screen();
+        screen_scroll();
     }
     else
     {
-        update_cursor();
+        cursor_update();
     }
-    
+
     return 0;
 }
 
-void delete_char(void)
+void
+vga_delete_char(void)
 {
-    // Don't delete if cursor is at the beginning
-    if (cursor_index == 0)
-        return;
-    
-    // Move cursor back one position
-    cursor_index--;
-    
-    // Clear the character on screen
-    if (cursor_index < ROWS_COUNT * COLUMNS_COUNT)
-        screen_buffer[cursor_index] = ' ' | (unsigned short)YELLOW << 8;
-    
-    // Clear the character in the buffer
-    stock[screen_index][cursor_index] = ' ' | (unsigned short)YELLOW << 8;
-    
-    // Handle going back to previous row
-    if (cursor_index % COLUMNS_COUNT == COLUMNS_COUNT - 1)
+    /* Prevent deletion at buffer start */
+    if (cursor_pos == 0)
     {
-        if (total_row[screen_index] > 0)
+        return;
+    }
+
+    /* Move cursor back one position */
+    cursor_pos--;
+
+    /* Clear character in VGA memory if visible */
+    if (cursor_pos < VGA_ROWS * VGA_COLS)
+    {
+        vga_buffer[cursor_pos] = ' ' | (unsigned short)YELLOW << 8;
+    }
+
+    /* Clear character in screen buffer */
+    stock[active_screen][cursor_pos] = ' ' | (unsigned short)YELLOW << 8;
+
+    /* Handle moving back to previous row */
+    if (cursor_pos % VGA_COLS == VGA_COLS - 1)
+    {
+        if (row_count[active_screen] > 0)
         {
-            total_row[screen_index]--;
+            row_count[active_screen]--;
         }
     }
-    
-    // Update display
-    if (total_row[screen_index] >= ROWS_COUNT)
+
+    /* Update display */
+    if (row_count[active_screen] >= VGA_ROWS)
     {
-        scroll_screen();
+        screen_scroll();
     }
     else
     {
-        update_cursor();
+        cursor_update();
     }
 }
 
-void print_str(const char *s, unsigned char color)
+/* ==========================================================================
+   String Output Functions
+   ========================================================================== */
+
+void
+vga_puts(const char *s, unsigned char color)
 {
     unsigned int i = 0;
 
-    while (s[i]) 
+    while (s[i])
     {
         if (s[i] == '\n')
         {
-            print_new_line();
+            vga_newline();
         }
-        else 
+        else
         {
-            print_char(s[i], color);
+            vga_putchar(s[i], color);
         }
         i++;
     }
 }
 
-void print_str_n(const char *s, unsigned char color, unsigned int n)
+void
+vga_puts_n(const char *s, unsigned char color, unsigned int n)
 {
     if (n < 0)
+    {
         return;
+    }
+
     unsigned int i = 0;
 
-    while (s[i] && i < n) 
+    while (s[i] && i < n)
     {
         if (s[i] == '\n')
         {
-            print_new_line();
+            vga_newline();
         }
-        else 
+        else
         {
-            print_char(s[i], color);
+            vga_putchar(s[i], color);
         }
         i++;
     }
 }
 
-void print_new_line()
-{
+/* ==========================================================================
+   Line Management Functions
+   ========================================================================== */
 
-    // if (cursor_index % COLUMNS_COUNT == 0)
-    // {
-    //     // + 80 = Ligne suivante si debut de ligne
-    //     cursor_index += COLUMNS_COUNT;
-    // }
-    // else
-    // {
-    int offset = COLUMNS_COUNT - ((cursor_index) % COLUMNS_COUNT);
-    for (; offset > 0; offset--) {
-        stock[screen_index][cursor_index] = ' ' | (unsigned short)WHITE << 8;
-        cursor_index++;
-        // print_char(' ', WHITE);
+void
+vga_newline(void)
+{
+    /* Calculate offset to next line start */
+    int offset = VGA_COLS - ((cursor_pos) % VGA_COLS);
+
+    /* Fill remaining space on current line */
+    for (; offset > 0; offset--)
+    {
+        stock[active_screen][cursor_pos] = ' ' | (unsigned short)WHITE << 8;
+        cursor_pos++;
     }
-    if (total_row[screen_index] == (BUFFER_ROW_COUNT - 1))
+
+    /* Check if buffer is full */
+    if (row_count[active_screen] == (BUFFER_ROWS - 1))
+    {
+        /* Scroll buffer up by one line */
+        for (int i = VGA_COLS; i < VGA_COLS * BUFFER_ROWS; i++)
         {
-            for (int i = COLUMNS_COUNT; i < COLUMNS_COUNT * BUFFER_ROW_COUNT; i++) {
-                stock[screen_index][i - COLUMNS_COUNT] = stock[screen_index][i];
-            }
-            for (int i = COLUMNS_COUNT * (BUFFER_ROW_COUNT - 1); i < COLUMNS_COUNT * BUFFER_ROW_COUNT; i++) {
-                stock[screen_index][i] = ' ' | (unsigned int)YELLOW << 8;
-            }
-            cursor_index -= COLUMNS_COUNT;
+            stock[active_screen][i - VGA_COLS] = stock[active_screen][i];
         }
-        else
+
+        /* Clear the last line */
+        for (int i = VGA_COLS * (BUFFER_ROWS - 1); i < VGA_COLS * BUFFER_ROWS; i++)
         {
-            total_row[screen_index]++;
+            stock[active_screen][i] = ' ' | (unsigned int)YELLOW << 8;
         }
-    display_screen(screen_index);
-    // }
-    // total_row[screen_index]++;
-    // if (total_row[screen_index] > ROWS_COUNT)
-    // {
-    //     scroll_screen();
-    // }
-    // else 
-    // {
-    //     update_cursor();
-    // }
+
+        cursor_pos -= VGA_COLS;
+    }
+    else
+    {
+        row_count[active_screen]++;
+    }
+
+    screen_display(active_screen);
 }
 
-int clear_screen()
+/* ==========================================================================
+   Screen Control Functions
+   ========================================================================== */
+
+int
+vga_clear(void)
 {
-    cursor_index = 0;
-    total_row[screen_index] = 0;
-    for (unsigned int i = 0; i < (BUFFER_ROW_COUNT * COLUMNS_COUNT); i++)
+    cursor_pos = 0;
+    row_count[active_screen] = 0;
+
+    /* Clear entire buffer with yellow attribute */
+    for (unsigned int i = 0; i < (BUFFER_ROWS * VGA_COLS); i++)
     {
-        stock[screen_index][i] = ' ' | (unsigned int)YELLOW << 8;
-        // print_char(' ', YELLOW);
+        stock[active_screen][i] = ' ' | (unsigned int)YELLOW << 8;
     }
-    cursor_index = 0;
-    total_row[screen_index] = 0;
-    update_cursor();
+
+    cursor_pos = 0;
+    row_count[active_screen] = 0;
+    cursor_update();
+
     return 0;
 }
 
-int kstrlen(char *s)
+/* ==========================================================================
+   String Utility Functions
+   ========================================================================== */
+
+int
+kstrlen(char *s)
 {
     char *new = s;
+
     while (*new)
     {
         new++;
     }
+
     return new - s;
-}
-
-static inline void outb(int port, int value) {
-    // outb is a macro that writes a byte to the port
-    asm volatile ("outb %%al, %%dx" : : "a"(value), "d"(port));
-}
-
-
-void set_cursor_offset(int offset) 
-{
-    outb(0x3D4, 0x0F); // LOW BYTE
-    outb(0x3D5, (uint8_t)(offset & 0xFF));
-
-    outb(0x3D4, 0x0E); // HIGH BYTE
-    outb(0x3D5, (uint8_t)((offset >> 8)));
-}
-void update_cursor() {
-    set_cursor_offset(cursor_index);
-}
-
-void set_cursor(int x, int y) 
-{
-    unsigned short position = y * COLUMNS_COUNT + x;
-    set_cursor_offset(position);
 }

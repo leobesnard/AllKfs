@@ -1,51 +1,95 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*   other_fonctions_2.c - String and length utility functions                */
+/*                                                                            */
+/*   Implements string length, integer length, and string search functions    */
+/*   used by the printf implementation.                                       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "../include/ft_printf.h"
 
-int	ft_intlen(int nb)
-{
-	int				i;
-	int				negative;
-	unsigned int	number;
+/* ==========================================================================
+   Integer Digit Count
+   ========================================================================== */
 
-	if (!nb)
-		return (1);
-	i = 0;
-	if (nb < 0)
-	{
-		number = -nb;
-		negative = 1;
-	}
-	else
-	{
-		number = nb;
-		negative = 0;
-	}
-	while (number)
-	{
-		number = number / 10;
-		i++;
-	}
-	return (i + negative);
+int
+ft_intlen(int nb)
+{
+    int             count;
+    int             is_negative;
+    unsigned int    number;
+
+    /* Zero has length 1 */
+    if (!nb)
+    {
+        return (1);
+    }
+
+    count = 0;
+
+    /* Handle negative numbers */
+    if (nb < 0)
+    {
+        number = -nb;
+        is_negative = 1;
+    }
+    else
+    {
+        number = nb;
+        is_negative = 0;
+    }
+
+    /* Count digits */
+    while (number)
+    {
+        number = number / 10;
+        count++;
+    }
+
+    return (count + is_negative);
 }
 
-size_t	ft_strlen(const char *s)
-{
-	size_t	i;
+/* ==========================================================================
+   String Length
+   ========================================================================== */
 
-	i = 0;
-	while (s[i])
-		i++;
-	return (i);
+size_t
+ft_strlen(const char *s)
+{
+    size_t count;
+
+    count = 0;
+
+    while (s[count])
+    {
+        count++;
+    }
+
+    return (count);
 }
 
-char	*ft_strchr(const char *s, int c)
+/* ==========================================================================
+   Character Search in String
+   ========================================================================== */
+
+char *
+ft_strchr(const char *s, int c)
 {
-	while (*s)
-	{
-		if (*s == (char)c)
-			return ((char *)s);
-		s++;
-	}
-	if (!*s && !c)
-		return ((char *)s);
-	return (NULL);
+    while (*s)
+    {
+        if (*s == (char)c)
+        {
+            return ((char *)s);
+        }
+        s++;
+    }
+
+    /* Handle searching for null terminator */
+    if (!*s && !c)
+    {
+        return ((char *)s);
+    }
+
+    return (NULL);
 }

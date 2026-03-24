@@ -1,72 +1,131 @@
+/*
+ * =============================================================================
+ *                              KFS2 BONUS - FORMAT SPECIFIER HANDLERS
+ * =============================================================================
+ * Handlers for various printf format specifiers
+ * =============================================================================
+ */
+
 #include "../include/ft_printf.h"
-// #include <limits.h>
 #include "screen.h"
 
-void	ft_choice_s(t_sc *sc, va_list arg)
-{
-	char	*s;
+/* =============================================================================
+ *                              STRING AND CHARACTER HANDLERS
+ * ============================================================================= */
 
-	s = va_arg(arg, char *);
-	if (!s)
-	{
-		print_str("(null)", WHITE);
-		// write(1, "(null)", 6);
-		sc->len = sc->len + 6;
-	}
-	else
-	{
-		ft_putstr(s);
-		sc->len = sc->len + ft_strlen(s);
-	}
+/*
+ * ft_choice_s - Handle %s format specifier
+ * @sc: Format state
+ * @arg: Variable argument list
+ *
+ * Prints a null-terminated string, or "(null)" if NULL
+ */
+void ft_choice_s(t_sc *sc, va_list arg)
+{
+    char *str;
+
+    str = va_arg(arg, char *);
+
+    if (!str)
+    {
+        vga_puts("(null)", WHITE);
+        sc->len = sc->len + 6;
+    }
+    else
+    {
+        ft_putstr(str);
+        sc->len = sc->len + ft_strlen(str);
+    }
 }
 
-void	ft_choice_c(t_sc *sc, va_list arg)
+/*
+ * ft_choice_c - Handle %c format specifier
+ * @sc: Format state
+ * @arg: Variable argument list
+ *
+ * Prints a single character
+ */
+void ft_choice_c(t_sc *sc, va_list arg)
 {
-	char	c;
+    char ch;
 
-	c = va_arg(arg, int);
-	ft_putchar(c);
-	sc->len = sc->len + 1;
+    ch = va_arg(arg, int);
+    ft_putchar(ch);
+    sc->len = sc->len + 1;
 }
 
-void	ft_choice_d_i(t_sc *sc, va_list arg)
-{
-	int	i;
+/* =============================================================================
+ *                              INTEGER HANDLERS
+ * ============================================================================= */
 
-	i = va_arg(arg, int);
-	ft_putnbr(i);
-	sc->len = sc->len + ft_intlen(i);
+/*
+ * ft_choice_d_i - Handle %d and %i format specifiers
+ * @sc: Format state
+ * @arg: Variable argument list
+ *
+ * Prints a signed decimal integer
+ */
+void ft_choice_d_i(t_sc *sc, va_list arg)
+{
+    int value;
+
+    value = va_arg(arg, int);
+    ft_putnbr(value);
+    sc->len = sc->len + ft_intlen(value);
 }
 
-void	ft_choice_p(t_sc *sc, va_list arg)
-{
-	void	*p;
+/* =============================================================================
+ *                              POINTER AND HEX HANDLERS
+ * ============================================================================= */
 
-	p = va_arg(arg, void *);
-	if (!p)
-	{
-		print_str("0x0", WHITE);
-		// write(1, "0x0", 3);
-		sc->len += 3;
-	}
-	else
-	{
-		print_str("0x", WHITE);
-		// write(1, "0x", 2);
-		sc->len += 2;
-		ft_print_adress((unsigned long)p);
-		sc->len = sc->len + ft_memlen((unsigned long)p, 16);
-	}
+/*
+ * ft_choice_p - Handle %p format specifier
+ * @sc: Format state
+ * @arg: Variable argument list
+ *
+ * Prints a pointer address in hexadecimal with "0x" prefix
+ */
+void ft_choice_p(t_sc *sc, va_list arg)
+{
+    void *ptr;
+
+    ptr = va_arg(arg, void *);
+
+    if (!ptr)
+    {
+        vga_puts("0x0", WHITE);
+        sc->len += 3;
+    }
+    else
+    {
+        vga_puts("0x", WHITE);
+        sc->len += 2;
+        ft_print_adress((unsigned long)ptr);
+        sc->len = sc->len + ft_memlen((unsigned long)ptr, 16);
+    }
 }
 
-void	ft_choice_x(char c, t_sc *sc, va_list arg)
+/*
+ * ft_choice_x - Handle %x and %X format specifiers
+ * @c: Format character ('x' for lowercase, 'X' for uppercase)
+ * @sc: Format state
+ * @arg: Variable argument list
+ *
+ * Prints an unsigned integer in hexadecimal format
+ */
+void ft_choice_x(char c, t_sc *sc, va_list arg)
 {
-	unsigned int	x;
+    unsigned int hex_value;
 
-	x = va_arg(arg, unsigned int);
-	ft_print_hexa_x((unsigned long)x, c);
-	if (x == 0 || x == (int)LONG_MIN)
-		sc->len = sc->len + ft_memlen((unsigned long)x, 16) + 1;
-	else
-		sc->len = sc->len + ft_memlen((unsigned long)x, 16);
+    hex_value = va_arg(arg, unsigned int);
+    ft_print_hexa_x((unsigned long)hex_value, c);
+
+    if (hex_value == 0 || hex_value == (int)LONG_MIN)
+    {
+        sc->len = sc->len + ft_memlen((unsigned long)hex_value, 16) + 1;
+    }
+    else
+    {
+        sc->len = sc->len + ft_memlen((unsigned long)hex_value, 16);
+    }
 }

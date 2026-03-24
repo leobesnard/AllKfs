@@ -1,14 +1,26 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*   kernel.c - Kernel entry point                                            */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "screen.h"
 
-int main(void)
+/*
+** Kernel main function - called from bootloader
+** Initializes VGA display and shows centered "42" message
+*/
+int
+main(void)
 {
-    screen_buffer = (unsigned short *)VGA_ADDRESS;
-    
-    // Clear screen first
-    clear_screen();
-    
-    // Display "42" centered on the screen (row 12 is middle of 25 rows)
-    print_centered("42", WHITE, 12);
-    
+    /* Initialize VGA buffer pointer to video memory address */
+    vga_buffer = (unsigned short *)VGA_MEMORY_BASE;
+
+    /* Clear display before outputting content */
+    vga_clear();
+
+    /* Display "42" centered on screen (row 12 is vertical center) */
+    vga_puts_centered("42", WHITE, 12);
+
     return 0;
 }

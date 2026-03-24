@@ -1,66 +1,80 @@
+/*
+ * =============================================================================
+ *                              KFS2 BONUS - SCROLL DRIVER
+ * =============================================================================
+ * Screen scrolling and multi-screen buffer management
+ * Handles virtual terminal scrolling with scroll-back support
+ * =============================================================================
+ */
+
 #include "screen.h"
-// Codes standard pour les touches flèches
-#define KEY_UP    0x48  // Scancode pour flèche haut
-#define KEY_DOWN  0x50  // Scancode pour flèche bas
 
-unsigned short stock[SCREEN_COUNT][ROWS_COUNT * COLUMNS_COUNT*2];   // array representing the screen 25 (rows) * 80 (columns) * 2 (char + color) = 4000 bytes
-int screen_index;
-unsigned short stock_cursor_index[SCREEN_COUNT];
-unsigned short extra_scroll[SCREEN_COUNT];
+/* =============================================================================
+ *                              ARROW KEY SCANCODES
+ * ============================================================================= */
 
-// static inline unsigned char inb(unsigned short port)
-// {
-//     unsigned char value;
-//     __asm__ volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
-//     return value;
-// }
+#define KEY_UP      0x48    /* Up arrow scancode */
+#define KEY_DOWN    0x50    /* Down arrow scancode */
 
-// unsigned char read_scancode()
-// {
-//     return inb(0x60);  // Lit un octet depuis le port d'E/S 0x60
-// }
+/* =============================================================================
+ *                              GLOBAL VARIABLES
+ * ============================================================================= */
 
-// void keyboard_interrupt_handler()
-// {
-//     scancode = read_scancode();
-//     // Acquitter l'interruption
-//     outb(0x20, 0x20);  // EOI au PIC
-// }
+/* Screen buffer storage: NUM_SCREENS virtual screens, each with scrollback */
+unsigned short stock[NUM_SCREENS][VGA_ROWS * VGA_COLS * 2];
 
-void scroll_screen()
+/* Index of currently active screen */
+int active_screen;
+
+/* Saved cursor positions for each screen */
+unsigned short stock_cursor_index[NUM_SCREENS];
+
+/* Scroll offset for each screen (lines scrolled back from bottom) */
+unsigned short scroll_offset[NUM_SCREENS];
+
+/* =============================================================================
+ *                              SCROLL FUNCTIONS
+ * ============================================================================= */
+
+/*
+ * screen_scroll - Scroll the current screen's visible area
+ *
+ * This function handles the display of scrollable content.
+ * It calculates which portion of the screen buffer to display
+ * based on the total rows and scroll offset.
+ *
+ * The scroll_offset allows viewing previous content (scroll-back feature).
+ */
+void screen_scroll(void)
 {
-    unsigned int overflow_rows = total_row[screen_index] - ROWS_COUNT + 1;
+    unsigned int overflow_rows = row_count[active_screen] - VGA_ROWS + 1;
 
-    //  switch(scancode) {
-    //     case KEY_UP:
-    //         // Scroll vers le haut (afficher contenu précédent)
-    //         if (overflow_rows > 0) {
-    //             overflow_rows--;
-    //             scroll_screen();
-    //         }
-    //         break;
-            
-    //     case KEY_DOWN:
-    //         // Scroll vers le bas (afficher contenu suivant)
-    //         if (overflow_rows < total_row) {
-    //             overflow_rows++;
-    //             scroll_screen();
-    //         }
-    //         break;
-    // }
-    if (overflow_rows > 0) {
-        overflow_rows = extra_scroll[screen_index] > overflow_rows ? 0 : overflow_rows - extra_scroll[screen_index];
-    }
-    
-    unsigned int start = overflow_rows * COLUMNS_COUNT;
-    int last_char_index = 0;
-    for (unsigned int i = 0; i < (ROWS_COUNT * COLUMNS_COUNT); i++)
+    /* Adjust for scroll offset (user scrolling up to view history) */
+    if (overflow_rows > 0)
     {
-        screen_buffer[i] = stock[screen_index][start + i] ? stock[screen_index][start + i] : ' ' | (unsigned short)WHITE<<8 ;
-        if (screen_buffer[i] && screen_buffer[i] != (' ' | (unsigned short)YELLOW<<8)) {
+        overflow_rows = scroll_offset[active_screen] > overflow_rows
+                        ? 0
+                        : overflow_rows - scroll_offset[active_screen];
+    }
+
+    /* Calculate starting position in the buffer */
+    unsigned int start = overflow_rows * VGA_COLS;
+    int last_char_index = 0;
+
+    /* Copy visible portion from stock to VGA buffer */
+    for (unsigned int i = 0; i < (VGA_ROWS * VGA_COLS); i++)
+    {
+        vga_buffer[i] = stock[active_screen][start + i]
+                        ? stock[active_screen][start + i]
+                        : ' ' | (unsigned short)WHITE << 8;
+
+        /* Track the last non-empty character position */
+        if (vga_buffer[i] && vga_buffer[i] != (' ' | (unsigned short)YELLOW << 8))
+        {
             last_char_index = i;
         }
-        // update_cursor();
     }
-    set_cursor_offset(last_char_index + 1);
+
+    /* Position cursor after the last character */
+    cursor_set_offset(last_char_index + 1);
 }
